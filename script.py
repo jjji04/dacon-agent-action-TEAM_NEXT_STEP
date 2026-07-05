@@ -121,8 +121,10 @@ def main():
         ids = [sample.get("id", i) for i, sample in enumerate(samples)]
         submission = pd.DataFrame({"id": ids, "action": predictions})
 
-    submission.to_csv("submission.csv", index=False)
-    print("saved submission.csv")
+    output_path = Path("output/submission.csv")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    submission.to_csv(output_path, index=False)
+    print(f"saved {output_path}")
 
 
 if __name__ == "__main__":

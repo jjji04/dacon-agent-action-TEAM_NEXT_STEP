@@ -27,7 +27,7 @@ def predict(
     test_jsonl_path: str = "data/test.jsonl",
     sample_submission_path: str = "data/sample_submission.csv",
     model_path: str = "model/model.joblib",
-    output_path: str = "submission.csv",
+    output_path: str = "output/submission.csv",
 ):
     test_path = Path(test_jsonl_path)
     sample_path = Path(sample_submission_path)
@@ -60,8 +60,10 @@ def predict(
         ids = [sample.get("id", i) for i, sample in enumerate(samples)]
         submission = pd.DataFrame({"id": ids, "action": predictions})
 
-    submission.to_csv(output_path, index=False)
-    print(f"5) submission 저장 완료: {output_path}")
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    submission.to_csv(output_file, index=False)
+    print(f"5) submission 저장 완료: {output_file}")
 
 
 if __name__ == "__main__":

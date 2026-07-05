@@ -73,7 +73,7 @@ python3 -m src.predict
 성공하면 아래 파일이 생성됩니다.
 
 ```text
-submission.csv
+output/submission.csv
 ```
 
 ## 제출 실행 파일 테스트

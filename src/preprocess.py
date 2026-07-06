@@ -144,6 +144,36 @@ def hint_tokens_to_text(sample: Dict[str, Any]) -> str:
         tokens.append("HINT_RUN")
     if re.search(r"\b(directory|folder|list|ls)\b", combined_text):
         tokens.append("HINT_LIST")
+    if re.search(r"\b(open|read|show|cat|display|inspect|view)\b", combined_text):
+        tokens.append("HINT_DIRECT_OPEN")
+    if re.search(
+        r"\b(grep|search|find|ripgrep|rg|occurrences?|matches?|pattern|regex)\b",
+        combined_text,
+    ):
+        tokens.append("HINT_FIND_PATTERN")
+    if re.search(r"\b(list|ls|tree|directory|folder|files in|what files)\b", combined_text):
+        tokens.append("HINT_LIST_DIR")
+    if re.search(
+        r"[\w./-]+\.(py|tsx?|jsx?|md|json|ya?ml|txt|csv|toml|css|html)",
+        combined_text,
+    ):
+        tokens.append("HINT_PATH_MENTION")
+    if re.search(r"\b(patch|diff|apply|hunk|edit_file|apply_patch)\b", combined_text):
+        tokens.append("HINT_PATCH_STYLE")
+    if re.search(r"\b(fail|failed|error|traceback|exception|red)\b", combined_text):
+        tokens.append("HINT_FAILURE")
+    if re.search(r"\b(plan|steps|break down|단계|계획)\b", combined_text):
+        tokens.append("HINT_PLAN_STEPS")
+    if re.search(r"\b(ask|clarify|confirm|question|물어|확인)\b", combined_text):
+        tokens.append("HINT_ASK_CLARIFY")
+    if current_prompt.strip().lower().startswith(("run ", "execute ", "test ", "lint ")):
+        tokens.append("HINT_PROMPT_COMMAND_START")
+    if len(open_files) == 1:
+        tokens.append("HINT_SINGLE_OPEN_FILE")
+    if len(open_files) > 1:
+        tokens.append("HINT_MULTI_OPEN_FILES")
+    if re.search(r"\b(todo|fixme|function|class|component|hook|schema)\b", combined_text):
+        tokens.append("HINT_CODE_SYMBOL")
     if open_files:
         tokens.append("HINT_HAS_OPEN_FILES")
     if workspace.get("git_dirty") is True:

@@ -23,6 +23,19 @@ def load_jsonl(path: str):
     return samples
 
 
+def predict_with_model(model, X):
+    if isinstance(model, dict) and model.get("kind") == "hierarchical":
+        predicted_groups = model["group_model"].predict(X)
+        predictions = []
+        for text, group in zip(X, predicted_groups):
+            action_model = model["action_models"].get(str(group))
+            if action_model is None:
+                action_model = next(iter(model["action_models"].values()))
+            predictions.append(action_model.predict([text])[0])
+        return predictions
+    return model.predict(X)
+
+
 def predict(
     test_jsonl_path: str = "data/test.jsonl",
     sample_submission_path: str = "data/sample_submission.csv",
@@ -48,7 +61,7 @@ def predict(
     model = joblib.load(model_file)
 
     print("4) 예측 중...")
-    predictions = model.predict(X)
+    predictions = predict_with_model(model, X)
 
     if sample_path.exists():
         submission = pd.read_csv(sample_path)

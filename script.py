@@ -81,6 +81,19 @@ def find_file(candidates):
     raise FileNotFoundError(f"Cannot find any of: {candidates}")
 
 
+def predict_with_model(model, X):
+    if isinstance(model, dict) and model.get("kind") == "hierarchical":
+        predicted_groups = model["group_model"].predict(X)
+        predictions = []
+        for text, group in zip(X, predicted_groups):
+            action_model = model["action_models"].get(str(group))
+            if action_model is None:
+                action_model = next(iter(model["action_models"].values()))
+            predictions.append(action_model.predict([text])[0])
+        return predictions
+    return model.predict(X)
+
+
 def main():
     test_path = find_file([
         "data/test.jsonl",
@@ -109,7 +122,7 @@ def main():
     X = [make_input_text(sample) for sample in samples]
 
     model = joblib.load(model_path)
-    predictions = model.predict(X)
+    predictions = predict_with_model(model, X)
 
     if sample_submission_path is not None:
         submission = pd.read_csv(sample_submission_path)

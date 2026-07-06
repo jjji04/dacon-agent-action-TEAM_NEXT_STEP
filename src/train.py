@@ -68,7 +68,9 @@ def build_model() -> Pipeline:
         )),
         ("clf", SGDClassifier(
             loss="log_loss",
+            penalty="elasticnet",
             alpha=3e-6,
+            l1_ratio=0.25,
             class_weight="balanced",
             max_iter=30,
             random_state=42,

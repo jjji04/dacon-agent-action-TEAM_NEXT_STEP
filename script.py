@@ -16,7 +16,7 @@ import joblib
 import pandas as pd
 
 
-def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 40) -> str:
+def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 20) -> str:
     if not isinstance(history, list):
         return ""
 
@@ -45,17 +45,80 @@ def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 40) 
     return "\n".join(lines)
 
 
+def session_meta_to_text(session_meta: Dict[str, Any]) -> str:
+    if not isinstance(session_meta, dict):
+        return ""
+
+    workspace = session_meta.get("workspace", {})
+    if not isinstance(workspace, dict):
+        workspace = {}
+
+    language_mix = workspace.get("language_mix", {})
+    if not isinstance(language_mix, dict):
+        language_mix = {}
+
+    open_files = workspace.get("open_files", [])
+    if not isinstance(open_files, list):
+        open_files = []
+
+    return "\n".join([
+        f"tier={session_meta.get('user_tier', '')}",
+        f"lang_pref={session_meta.get('language_pref', '')}",
+        f"git_dirty={workspace.get('git_dirty', '')}",
+        f"last_ci={workspace.get('last_ci_status', '')}",
+        "open_files=" + " ".join(str(path) for path in open_files),
+        "langs=" + " ".join(str(language) for language in language_mix.keys()),
+    ])
+
+
+def last_context_to_text(history: List[Dict[str, Any]]) -> str:
+    if not isinstance(history, list):
+        return ""
+
+    actions = [
+        item for item in history
+        if isinstance(item, dict) and item.get("role") == "assistant_action"
+    ]
+    users = [
+        item for item in history
+        if isinstance(item, dict) and item.get("role") == "user"
+    ]
+
+    lines = []
+    if actions:
+        last_action = actions[-1]
+        lines.append(f"LAST_ACTION_NAME: {last_action.get('name', '')}")
+        lines.append(
+            "LAST_ACTION_ARGS: "
+            + json.dumps(last_action.get("args", {}), ensure_ascii=False, sort_keys=True)
+        )
+        lines.append(f"LAST_ACTION_RESULT: {last_action.get('result_summary', '')}")
+        lines.append(
+            "RECENT_ACTION_NAMES: "
+            + " ".join(str(action.get("name", "")) for action in actions[-5:])
+        )
+
+    if users:
+        lines.append(f"LAST_USER: {users[-1].get('content', '')}")
+
+    return "\n".join(lines)
+
+
 def make_input_text(sample: Dict[str, Any]) -> str:
     if not isinstance(sample, dict):
         sample = {}
 
     current_prompt = sample.get("current_prompt", "")
+    last_context_text = last_context_to_text(sample.get("history", []))
     history_text = history_to_text(sample.get("history", []))
-    meta_text = json.dumps(sample.get("session_meta", {}), ensure_ascii=False, sort_keys=True)
+    meta_text = session_meta_to_text(sample.get("session_meta", {}))
 
     return (
         "CURRENT:\n"
         f"{current_prompt}\n\n"
+        f"{current_prompt}\n\n"
+        "LAST_CONTEXT:\n"
+        f"{last_context_text}\n\n"
         "HISTORY:\n"
         f"{history_text}\n\n"
         "META:\n"

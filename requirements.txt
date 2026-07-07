@@ -1,4 +1,2 @@
-pandas
-numpy
-scikit-learn
-joblib
+# Evaluation server already provides pandas, numpy, scikit-learn, and joblib.
+# Keep this file installable but empty of extra dependencies.

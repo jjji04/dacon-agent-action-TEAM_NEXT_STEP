@@ -151,6 +151,7 @@ activemq-data/
 .env
 .envrc
 .venv
+.venv-submit/
 env/
 venv/
 ENV/
@@ -216,3 +217,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Competition artifacts
+model/*.joblib
+output/
+submission.csv
+submit.zip

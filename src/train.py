@@ -13,7 +13,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
@@ -53,8 +53,7 @@ def build_model() -> Pipeline:
     """
     TF-IDF + 선형 분류 모델입니다.
 
-    10분 추론 제한 안에서 더 강한 선형 분류를 쓰기 위해
-    LogisticRegression(liblinear)을 사용합니다.
+    SGDClassifier(log_loss)는 빠른 로지스틱 회귀 계열 모델입니다.
     """
     return Pipeline([
         ("tfidf", TfidfVectorizer(
@@ -67,12 +66,15 @@ def build_model() -> Pipeline:
             use_idf=True,
             norm="l2",
         )),
-        ("clf", LogisticRegression(
-            C=128.0,
+        ("clf", SGDClassifier(
+            loss="log_loss",
+            penalty="elasticnet",
+            alpha=3e-6,
+            l1_ratio=0.25,
             class_weight="balanced",
-            solver="liblinear",
-            max_iter=1500,
+            max_iter=30,
             random_state=42,
+            n_jobs=-1,
         )),
     ])
 
@@ -96,7 +98,7 @@ def build_hierarchical_model(X, y):
 
     return {
         "kind": "hierarchical",
-        "model_type": "logistic",
+        "model_type": "sgd",
         "group_model": group_model,
         "action_models": action_models,
         "action_to_group": ACTION_TO_GROUP,
@@ -136,18 +138,18 @@ def build_validated_model(X, y, validation_size: float = 0.2):
     print("4-1) 단일 모델 검증 학습 중...")
     single_model = build_model()
     single_model.fit(X_train, y_train)
-    single_score = score_candidate("single_logistic", single_model, X_valid, y_valid)
+    single_score = score_candidate("single_sgd", single_model, X_valid, y_valid)
 
     print("4-2) 계층형 모델 검증 학습 중...")
     hierarchical_model = build_hierarchical_model(X_train, y_train)
-    hierarchical_score = score_candidate("hierarchical_logistic", hierarchical_model, X_valid, y_valid)
+    hierarchical_score = score_candidate("hierarchical_sgd", hierarchical_model, X_valid, y_valid)
 
     if hierarchical_score >= single_score:
         print("4-3) 계층형 모델 선택 후 전체 데이터 재학습 중...")
         return build_hierarchical_model(X, y), {
             "single_accuracy": single_score,
             "hierarchical_accuracy": hierarchical_score,
-            "selected": "hierarchical_logistic",
+            "selected": "hierarchical_sgd",
         }
 
     print("4-3) 단일 모델 선택 후 전체 데이터 재학습 중...")
@@ -156,7 +158,7 @@ def build_validated_model(X, y, validation_size: float = 0.2):
     return final_model, {
         "single_accuracy": single_score,
         "hierarchical_accuracy": hierarchical_score,
-        "selected": "single_logistic",
+        "selected": "single_sgd",
     }
 
 
@@ -196,7 +198,7 @@ def train(
         model, metrics = build_validated_model(X, y, validation_size=validation_size)
     else:
         model = build_hierarchical_model(X, y)
-        metrics = {"selected": "hierarchical_logistic"}
+        metrics = {"selected": "hierarchical_sgd"}
 
     print("5) 학습 완료")
     print("train samples:", len(X))

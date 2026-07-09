@@ -208,6 +208,7 @@ def make_input_text(sample: Dict[str, Any]) -> str:
         f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"
+        f"{current_prompt}\n\n"
         "HINTS:\n"
         f"{hint_text}\n\n"
         "LAST_CONTEXT:\n"

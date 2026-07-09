@@ -10,7 +10,7 @@ import re
 from typing import Any, Dict, List
 
 
-def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 8) -> str:
+def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 10) -> str:
     """
     history 리스트를 문자열로 변환합니다.
 

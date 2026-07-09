@@ -17,7 +17,7 @@ import joblib
 import pandas as pd
 
 
-def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 8) -> str:
+def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 10) -> str:
     if not isinstance(history, list):
         return ""
 

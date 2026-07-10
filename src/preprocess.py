@@ -167,6 +167,12 @@ def hint_tokens_to_text(sample: Dict[str, Any]) -> str:
         tokens.append("HINT_LIST_DIRECTORY_STRONG")
     if re.search(r"\b(patch|diff|apply|hunk|edit_file|apply_patch)\b", combined_text):
         tokens.append("HINT_PATCH_STYLE")
+    if re.search(r"\b(apply patch|apply_patch|diff|hunk|patch file|patching|unified diff)\b", combined_text):
+        tokens.append("HINT_APPLY_PATCH_STRONG")
+    if re.search(r"\b(edit|modify|change|update|fix|refactor|replace|rename|adjust)\b", combined_text):
+        tokens.append("HINT_EDIT_FILE_STRONG")
+    if re.search(r"\b(create file|new file|write file|save file|generate file|add file|write_file)\b", combined_text):
+        tokens.append("HINT_WRITE_FILE_STRONG")
     if re.search(r"\b(fail|failed|error|traceback|exception|red)\b", combined_text):
         tokens.append("HINT_FAILURE")
     if re.search(r"\b(plan|steps|break down|단계|계획)\b", combined_text):

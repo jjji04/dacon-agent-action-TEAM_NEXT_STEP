@@ -10,7 +10,7 @@ import re
 from typing import Any, Dict, List
 
 
-def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 8) -> str:
+def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 10) -> str:
     """
     history 리스트를 문자열로 변환합니다.
 
@@ -158,6 +158,13 @@ def hint_tokens_to_text(sample: Dict[str, Any]) -> str:
         combined_text,
     ):
         tokens.append("HINT_PATH_MENTION")
+        tokens.append("HINT_READ_FILE_PATH_STRONG")
+    if re.search(r"\*\.[a-zA-Z0-9]+|\*\*/|glob", combined_text):
+        tokens.append("HINT_GLOB_PATTERN_STRONG")
+    if re.search(r"\b(rg|grep|ripgrep|occurrences?|matches?|search for|find occurrences)\b", combined_text):
+        tokens.append("HINT_GREP_SEARCH_STRONG")
+    if re.search(r"\b(ls|tree|list directory|folder structure|directory tree|what files|files in)\b", combined_text):
+        tokens.append("HINT_LIST_DIRECTORY_STRONG")
     if re.search(r"\b(patch|diff|apply|hunk|edit_file|apply_patch)\b", combined_text):
         tokens.append("HINT_PATCH_STYLE")
     if re.search(r"\b(fail|failed|error|traceback|exception|red)\b", combined_text):
@@ -214,6 +221,8 @@ def make_input_text(sample: Dict[str, Any]) -> str:
 
     return (
         "CURRENT:\n"
+        f"{current_prompt}\n\n"
+        f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"

@@ -10,7 +10,7 @@ import re
 from typing import Any, Dict, List
 
 
-def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 8) -> str:
+def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 3) -> str:
     """
     history 리스트를 문자열로 변환합니다.
 
@@ -214,6 +214,7 @@ def make_input_text(sample: Dict[str, Any]) -> str:
 
     return (
         "CURRENT:\n"
+        f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"

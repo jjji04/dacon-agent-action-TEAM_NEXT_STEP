@@ -17,7 +17,7 @@ import joblib
 import pandas as pd
 
 
-def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 8) -> str:
+def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 3) -> str:
     if not isinstance(history, list):
         return ""
 
@@ -197,6 +197,7 @@ def make_input_text(sample: Dict[str, Any]) -> str:
 
     return (
         "CURRENT:\n"
+        f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"
         f"{current_prompt}\n\n"

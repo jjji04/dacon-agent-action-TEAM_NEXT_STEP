@@ -39,6 +39,14 @@ ACTION_TO_GROUP = {
 }
 
 
+ACTION_MODEL_ALPHA = {
+    "dialog_plan": 1e-4,
+    "execute_check": 3e-5,
+    "search_read": 3e-5,
+    "write_edit": 1e-5,
+}
+
+
 def load_jsonl(path: str):
     samples = []
     with open(path, "r", encoding="utf-8") as f:
@@ -92,7 +100,7 @@ def build_hierarchical_model(X, y):
         group_y = [y[i] for i in indexes]
         group_to_actions[group] = sorted(set(group_y))
 
-        model = build_model()
+        model = build_model(alpha=ACTION_MODEL_ALPHA.get(group, 3e-6))
         model.fit(group_X, group_y)
         action_models[group] = model
 

@@ -17,11 +17,6 @@ import joblib
 import pandas as pd
 
 
-GROUP_SCORE_POWER = 1.1
-ACTION_SCORE_POWER = 0.9
-CANDIDATE_MISMATCH_PENALTY = 0.9
-
-
 def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 3) -> str:
     if not isinstance(history, list):
         return ""
@@ -292,12 +287,9 @@ def predict_with_model(model, X):
                     action_classes = list(action_model.named_steps["clf"].classes_)
                     action_probs = action_model.predict_proba([text])[0]
                     for action, action_prob in zip(action_classes, action_probs):
-                        score = (
-                            float(group_prob) ** GROUP_SCORE_POWER
-                            * float(action_prob) ** ACTION_SCORE_POWER
-                        )
+                        score = float(group_prob) * float(action_prob)
                         if candidate_actions is not None and action not in candidate_actions:
-                            score *= CANDIDATE_MISMATCH_PENALTY
+                            score *= 0.9
                         if score > best_score:
                             best_score = score
                             best_action = action

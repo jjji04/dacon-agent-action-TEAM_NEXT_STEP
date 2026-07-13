@@ -98,6 +98,11 @@ def last_context_to_text(history: List[Dict[str, Any]]) -> str:
             "RECENT_ACTION_NAMES: "
             + " ".join(str(action.get("name", "")) for action in actions[-5:])
         )
+        lines.append(f"LAST_ACTION_NAME_REPEAT: {last_action.get('name', '')}")
+        lines.append(
+            "RECENT_ACTION_NAMES_REPEAT: "
+            + " ".join(str(action.get("name", "")) for action in actions[-5:])
+        )
 
     if users:
         lines.append(f"LAST_USER: {users[-1].get('content', '')}")

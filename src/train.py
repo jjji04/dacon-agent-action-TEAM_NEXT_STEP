@@ -49,7 +49,7 @@ def load_jsonl(path: str):
     return samples
 
 
-def build_model() -> Pipeline:
+def build_model(alpha: float = 3e-6) -> Pipeline:
     """
     TF-IDF + 선형 분류 모델입니다.
 
@@ -69,7 +69,7 @@ def build_model() -> Pipeline:
         ("clf", SGDClassifier(
             loss="log_loss",
             penalty="elasticnet",
-            alpha=3e-6,
+            alpha=alpha,
             l1_ratio=0.25,
             class_weight="balanced",
             max_iter=30,
@@ -81,7 +81,7 @@ def build_model() -> Pipeline:
 
 def build_hierarchical_model(X, y):
     groups = [ACTION_TO_GROUP[label] for label in y]
-    group_model = build_model()
+    group_model = build_model(alpha=1e-6)
     group_model.fit(X, groups)
 
     action_models = {}

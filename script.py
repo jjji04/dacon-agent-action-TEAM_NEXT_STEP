@@ -235,6 +235,35 @@ def find_file(candidates):
     raise FileNotFoundError(f"Cannot find any of: {candidates}")
 
 
+def candidate_actions_from_text(text: str):
+    actions = None
+
+    def add(candidate):
+        nonlocal actions
+        actions = set(candidate) if actions is None else actions | set(candidate)
+
+    if "HINT_TEST" in text:
+        add(["run_tests", "run_bash", "lint_or_typecheck"])
+    if "HINT_LINT" in text:
+        add(["lint_or_typecheck", "run_tests", "run_bash"])
+    if "HINT_FIND_PATTERN" in text or "HINT_SEARCH" in text:
+        add(["grep_search", "glob_pattern", "read_file", "list_directory"])
+    if "HINT_LIST_DIR" in text or "HINT_LIST" in text:
+        add(["list_directory", "glob_pattern", "grep_search"])
+    if "HINT_DIRECT_OPEN" in text or "HINT_READ" in text:
+        add(["read_file", "grep_search", "glob_pattern", "list_directory"])
+    if "HINT_PATCH_STYLE" in text:
+        add(["apply_patch", "edit_file"])
+    if "HINT_EDIT" in text:
+        add(["edit_file", "apply_patch", "write_file"])
+    if "HINT_PLAN_STEPS" in text:
+        add(["plan_task", "respond_only"])
+    if "HINT_ASK_CLARIFY" in text or "HINT_QUESTION" in text:
+        add(["ask_user", "respond_only", "plan_task"])
+
+    return actions
+
+
 def predict_with_model(model, X):
     if isinstance(model, dict) and model.get("kind") == "hierarchical":
         group_model = model["group_model"]
@@ -250,6 +279,7 @@ def predict_with_model(model, X):
                 )[:2]
                 best_action = None
                 best_score = -1.0
+                candidate_actions = candidate_actions_from_text(text)
                 for group, group_prob in top_groups:
                     action_model = model["action_models"].get(str(group))
                     if action_model is None or not hasattr(action_model, "predict_proba"):
@@ -258,6 +288,8 @@ def predict_with_model(model, X):
                     action_probs = action_model.predict_proba([text])[0]
                     for action, action_prob in zip(action_classes, action_probs):
                         score = float(group_prob) * float(action_prob)
+                        if candidate_actions is not None and action not in candidate_actions:
+                            score *= 0.9
                         if score > best_score:
                             best_score = score
                             best_action = action

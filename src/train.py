@@ -87,6 +87,31 @@ def build_model(alpha: float = 3e-6) -> Pipeline:
     ])
 
 
+def build_search_read_model(alpha: float = 3e-5) -> Pipeline:
+    return Pipeline([
+        ("tfidf", TfidfVectorizer(
+            analyzer="word",
+            lowercase=True,
+            ngram_range=(1, 3),
+            min_df=1,
+            max_features=220000,
+            sublinear_tf=True,
+            use_idf=True,
+            norm="l2",
+        )),
+        ("clf", SGDClassifier(
+            loss="log_loss",
+            penalty="elasticnet",
+            alpha=alpha,
+            l1_ratio=0.25,
+            class_weight="balanced",
+            max_iter=30,
+            random_state=42,
+            n_jobs=-1,
+        )),
+    ])
+
+
 def build_hierarchical_model(X, y):
     groups = [ACTION_TO_GROUP[label] for label in y]
     group_model = build_model(alpha=1e-6)
@@ -100,7 +125,11 @@ def build_hierarchical_model(X, y):
         group_y = [y[i] for i in indexes]
         group_to_actions[group] = sorted(set(group_y))
 
-        model = build_model(alpha=ACTION_MODEL_ALPHA.get(group, 3e-6))
+        alpha = ACTION_MODEL_ALPHA.get(group, 3e-6)
+        if group == "search_read":
+            model = build_search_read_model(alpha=alpha)
+        else:
+            model = build_model(alpha=alpha)
         model.fit(group_X, group_y)
         action_models[group] = model
 

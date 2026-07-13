@@ -13,6 +13,11 @@ import pandas as pd
 from src.preprocess import make_input_text
 
 
+GROUP_SCORE_POWER = 1.1
+ACTION_SCORE_POWER = 0.9
+CANDIDATE_MISMATCH_PENALTY = 0.9
+
+
 def load_jsonl(path: str):
     samples = []
     with open(path, "r", encoding="utf-8") as f:
@@ -75,9 +80,12 @@ def predict_with_model(model, X):
                     action_classes = list(action_model.named_steps["clf"].classes_)
                     action_probs = action_model.predict_proba([text])[0]
                     for action, action_prob in zip(action_classes, action_probs):
-                        score = float(group_prob) * float(action_prob)
+                        score = (
+                            float(group_prob) ** GROUP_SCORE_POWER
+                            * float(action_prob) ** ACTION_SCORE_POWER
+                        )
                         if candidate_actions is not None and action not in candidate_actions:
-                            score *= 0.9
+                            score *= CANDIDATE_MISMATCH_PENALTY
                         if score > best_score:
                             best_score = score
                             best_action = action

@@ -237,7 +237,36 @@ def find_file(candidates):
 
 def predict_with_model(model, X):
     if isinstance(model, dict) and model.get("kind") == "hierarchical":
-        predicted_groups = model["group_model"].predict(X)
+        group_model = model["group_model"]
+        if hasattr(group_model, "predict_proba"):
+            group_classes = list(group_model.named_steps["clf"].classes_)
+            group_probs = group_model.predict_proba(X)
+            predictions = []
+            for text, probs in zip(X, group_probs):
+                top_groups = sorted(
+                    zip(group_classes, probs),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )[:2]
+                best_action = None
+                best_score = -1.0
+                for group, group_prob in top_groups:
+                    action_model = model["action_models"].get(str(group))
+                    if action_model is None or not hasattr(action_model, "predict_proba"):
+                        continue
+                    action_classes = list(action_model.named_steps["clf"].classes_)
+                    action_probs = action_model.predict_proba([text])[0]
+                    for action, action_prob in zip(action_classes, action_probs):
+                        score = float(group_prob) * float(action_prob)
+                        if score > best_score:
+                            best_score = score
+                            best_action = action
+                if best_action is None:
+                    best_action = model["action_models"][str(top_groups[0][0])].predict([text])[0]
+                predictions.append(best_action)
+            return predictions
+
+        predicted_groups = group_model.predict(X)
         predictions = []
         for text, group in zip(X, predicted_groups):
             action_model = model["action_models"].get(str(group))

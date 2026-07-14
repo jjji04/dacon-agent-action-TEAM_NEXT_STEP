@@ -16,7 +16,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 from src.preprocess import make_input_text
 
@@ -62,6 +62,8 @@ SPECIALIST_CLUSTER_THRESHOLDS = {
 SPECIALIST_MODEL_ALPHA = {
     "execute": 5e-5,
 }
+STACKING_FOLDS = 5
+STACK_TOKEN_MODE = "action_group"
 
 
 def load_jsonl(path: str):
@@ -227,6 +229,54 @@ def build_hierarchical_model(X, y):
     }
 
 
+def stack_token_for_prediction(action: str) -> str:
+    group = ACTION_TO_GROUP.get(action, "unknown")
+    if STACK_TOKEN_MODE == "action_group":
+        return f"STACK_PRED_ACTION_{action} STACK_PRED_GROUP_{group}"
+    return f"STACK_PRED_ACTION_{action}"
+
+
+def append_stack_tokens(X, predicted_actions):
+    return [
+        f"{text}\n\n{stack_token_for_prediction(action)}"
+        for text, action in zip(X, predicted_actions)
+    ]
+
+
+def oof_predictions(X, y, folds: int = STACKING_FOLDS):
+    predictions = [None] * len(X)
+    splitter = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
+    for fold_index, (train_index, valid_index) in enumerate(splitter.split(X, y), start=1):
+        print(f"    stacking fold {fold_index}/{folds} 학습 중...")
+        fold_model = build_hierarchical_model(
+            [X[i] for i in train_index],
+            [y[i] for i in train_index],
+        )
+        fold_predictions = predict_with_model(fold_model, [X[i] for i in valid_index])
+        for index, prediction in zip(valid_index, fold_predictions):
+            predictions[index] = prediction
+
+    missing = [i for i, prediction in enumerate(predictions) if prediction is None]
+    if missing:
+        raise RuntimeError(f"OOF 예측이 비어 있는 행이 있습니다: {missing[:5]}")
+    return predictions
+
+
+def build_stacked_hierarchical_model(X, y, folds: int = STACKING_FOLDS):
+    base_model = build_hierarchical_model(X, y)
+    train_predictions = oof_predictions(X, y, folds=folds)
+    stacked_X = append_stack_tokens(X, train_predictions)
+    stack_model = build_hierarchical_model(stacked_X, y)
+    return {
+        "kind": "stacked_hierarchical",
+        "model_type": "sgd",
+        "stack_token_mode": STACK_TOKEN_MODE,
+        "base_model": base_model,
+        "stack_model": stack_model,
+        "action_to_group": ACTION_TO_GROUP,
+    }
+
+
 def candidate_actions_from_text(text: str):
     actions = None
 
@@ -257,6 +307,11 @@ def candidate_actions_from_text(text: str):
 
 
 def predict_with_model(model, X):
+    if isinstance(model, dict) and model.get("kind") == "stacked_hierarchical":
+        base_predictions = predict_with_model(model["base_model"], X)
+        stacked_X = append_stack_tokens(X, base_predictions)
+        return predict_with_model(model["stack_model"], stacked_X)
+
     if isinstance(model, dict) and model.get("kind") == "hierarchical":
         group_model = model["group_model"]
         if hasattr(group_model, "predict_proba"):
@@ -369,20 +424,35 @@ def build_validated_model(X, y, validation_size: float = 0.2):
     hierarchical_model = build_hierarchical_model(X_train, y_train)
     hierarchical_score = score_candidate("hierarchical_sgd", hierarchical_model, X_valid, y_valid)
 
+    print("4-3) 스태킹 계층형 모델 검증 학습 중...")
+    stacked_model = build_stacked_hierarchical_model(X_train, y_train)
+    stacked_score = score_candidate("stacked_hierarchical_sgd", stacked_model, X_valid, y_valid)
+
+    if stacked_score >= max(single_score, hierarchical_score):
+        print("4-4) 스태킹 계층형 모델 선택 후 전체 데이터 재학습 중...")
+        return build_stacked_hierarchical_model(X, y), {
+            "single_accuracy": single_score,
+            "hierarchical_accuracy": hierarchical_score,
+            "stacked_hierarchical_accuracy": stacked_score,
+            "selected": "stacked_hierarchical_sgd",
+        }
+
     if hierarchical_score >= single_score:
-        print("4-3) 계층형 모델 선택 후 전체 데이터 재학습 중...")
+        print("4-4) 계층형 모델 선택 후 전체 데이터 재학습 중...")
         return build_hierarchical_model(X, y), {
             "single_accuracy": single_score,
             "hierarchical_accuracy": hierarchical_score,
+            "stacked_hierarchical_accuracy": stacked_score,
             "selected": "hierarchical_sgd",
         }
 
-    print("4-3) 단일 모델 선택 후 전체 데이터 재학습 중...")
+    print("4-4) 단일 모델 선택 후 전체 데이터 재학습 중...")
     final_model = build_model()
     final_model.fit(X, y)
     return final_model, {
         "single_accuracy": single_score,
         "hierarchical_accuracy": hierarchical_score,
+        "stacked_hierarchical_accuracy": stacked_score,
         "selected": "single_sgd",
     }
 
@@ -428,7 +498,9 @@ def train(
     print("5) 학습 완료")
     print("train samples:", len(X))
     print("selected model:", metrics["selected"])
-    if isinstance(model, dict):
+    if isinstance(model, dict) and model.get("kind") == "stacked_hierarchical":
+        print("groups:", sorted(model["stack_model"]["action_models"]))
+    elif isinstance(model, dict):
         print("groups:", sorted(model["action_models"]))
     else:
         print("classes:", list(model.named_steps["clf"].classes_))

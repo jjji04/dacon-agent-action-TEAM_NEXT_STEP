@@ -58,6 +58,9 @@ SPECIALIST_CLUSTER_THRESHOLDS = {
     "search": (0.4, 0.02),
     "execute": (0.45, 0.08),
 }
+SPECIALIST_MODEL_ALPHA = {
+    "execute": 5e-5,
+}
 
 
 def load_jsonl(path: str):
@@ -183,7 +186,7 @@ def build_specialist_models(X, y):
         if len(set(cluster_y)) < 2:
             continue
         cluster_X = [X[i] for i in indexes]
-        model = build_specialist_model()
+        model = build_specialist_model(alpha=SPECIALIST_MODEL_ALPHA.get(cluster_name, 3e-5))
         model.fit(cluster_X, cluster_y)
         specialist_models[cluster_name] = model
     return specialist_models

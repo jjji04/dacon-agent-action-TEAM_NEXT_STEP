@@ -21,6 +21,9 @@ SPECIALIST_ACTION_CLUSTERS = {
 }
 SPECIALIST_CONFIDENCE_THRESHOLD = 0.6
 SPECIALIST_MARGIN_THRESHOLD = 0.05
+SPECIALIST_CLUSTER_THRESHOLDS = {
+    "execute": (0.45, 0.08),
+}
 
 
 def load_jsonl(path: str):
@@ -126,12 +129,15 @@ def apply_specialist_correction(model, text, action_scores, best_action):
     second_action, second_score = action_scores[1]
     if top_action != best_action:
         return best_action
-    if top_score - second_score > SPECIALIST_MARGIN_THRESHOLD:
-        return best_action
-
     for cluster_name, actions in SPECIALIST_ACTION_CLUSTERS.items():
         if top_action not in actions or second_action not in actions:
             continue
+        confidence_threshold, margin_threshold = SPECIALIST_CLUSTER_THRESHOLDS.get(
+            cluster_name,
+            (SPECIALIST_CONFIDENCE_THRESHOLD, SPECIALIST_MARGIN_THRESHOLD),
+        )
+        if top_score - second_score > margin_threshold:
+            return best_action
         specialist_model = specialist_models.get(cluster_name)
         if specialist_model is None or not hasattr(specialist_model, "predict_proba"):
             return best_action
@@ -140,7 +146,7 @@ def apply_specialist_correction(model, text, action_scores, best_action):
         best_index = int(probabilities.argmax())
         specialist_action = classes[best_index]
         specialist_confidence = float(probabilities[best_index])
-        if specialist_action != top_action and specialist_confidence >= SPECIALIST_CONFIDENCE_THRESHOLD:
+        if specialist_action != top_action and specialist_confidence >= confidence_threshold:
             return specialist_action
         return best_action
 

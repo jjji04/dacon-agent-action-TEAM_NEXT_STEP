@@ -17,6 +17,16 @@ import joblib
 import pandas as pd
 
 
+SPECIALIST_ACTION_CLUSTERS = {
+    "search": {"read_file", "list_directory", "grep_search", "glob_pattern"},
+    "write": {"edit_file", "apply_patch"},
+    "execute": {"run_bash", "run_tests", "lint_or_typecheck"},
+    "dialog": {"ask_user", "plan_task", "respond_only"},
+}
+SPECIALIST_CONFIDENCE_THRESHOLD = 0.6
+SPECIALIST_MARGIN_THRESHOLD = 0.05
+
+
 def history_to_text(history: List[Dict[str, Any]], max_history_items: int = 3) -> str:
     if not isinstance(history, list):
         return ""
@@ -280,6 +290,7 @@ def predict_with_model(model, X):
                 best_action = None
                 best_score = -1.0
                 candidate_actions = candidate_actions_from_text(text)
+                action_scores = []
                 for group, group_prob in top_groups:
                     action_model = model["action_models"].get(str(group))
                     if action_model is None or not hasattr(action_model, "predict_proba"):
@@ -290,9 +301,18 @@ def predict_with_model(model, X):
                         score = float(group_prob) * float(action_prob)
                         if candidate_actions is not None and action not in candidate_actions:
                             score *= 0.9
+                        action_scores.append((action, score))
                         if score > best_score:
                             best_score = score
                             best_action = action
+                action_scores.sort(key=lambda item: item[1], reverse=True)
+                if len(action_scores) >= 2:
+                    best_action = apply_specialist_correction(
+                        model,
+                        text,
+                        action_scores,
+                        best_action,
+                    )
                 if best_action is None:
                     best_action = model["action_models"][str(top_groups[0][0])].predict([text])[0]
                 predictions.append(best_action)
@@ -307,6 +327,36 @@ def predict_with_model(model, X):
             predictions.append(action_model.predict([text])[0])
         return predictions
     return model.predict(X)
+
+
+def apply_specialist_correction(model, text, action_scores, best_action):
+    specialist_models = model.get("specialist_models", {})
+    if not specialist_models:
+        return best_action
+
+    top_action, top_score = action_scores[0]
+    second_action, second_score = action_scores[1]
+    if top_action != best_action:
+        return best_action
+    if top_score - second_score > SPECIALIST_MARGIN_THRESHOLD:
+        return best_action
+
+    for cluster_name, actions in SPECIALIST_ACTION_CLUSTERS.items():
+        if top_action not in actions or second_action not in actions:
+            continue
+        specialist_model = specialist_models.get(cluster_name)
+        if specialist_model is None or not hasattr(specialist_model, "predict_proba"):
+            return best_action
+        classes = list(specialist_model.named_steps["clf"].classes_)
+        probabilities = specialist_model.predict_proba([text])[0]
+        best_index = int(probabilities.argmax())
+        specialist_action = classes[best_index]
+        specialist_confidence = float(probabilities[best_index])
+        if specialist_action != top_action and specialist_confidence >= SPECIALIST_CONFIDENCE_THRESHOLD:
+            return specialist_action
+        return best_action
+
+    return best_action
 
 
 def main():

@@ -46,6 +46,15 @@ ACTION_MODEL_ALPHA = {
     "write_edit": 1e-5,
 }
 
+SPECIALIST_ACTION_CLUSTERS = {
+    "search": {"read_file", "list_directory", "grep_search", "glob_pattern"},
+    "write": {"edit_file", "apply_patch"},
+    "execute": {"run_bash", "run_tests", "lint_or_typecheck"},
+    "dialog": {"ask_user", "plan_task", "respond_only"},
+}
+SPECIALIST_CONFIDENCE_THRESHOLD = 0.6
+SPECIALIST_MARGIN_THRESHOLD = 0.05
+
 
 def load_jsonl(path: str):
     samples = []
@@ -137,6 +146,45 @@ def build_write_edit_model(alpha: float = 1e-5) -> Pipeline:
     ])
 
 
+def build_specialist_model(alpha: float = 3e-5) -> Pipeline:
+    return Pipeline([
+        ("tfidf", TfidfVectorizer(
+            analyzer="word",
+            lowercase=True,
+            ngram_range=(1, 3),
+            min_df=1,
+            max_features=160000,
+            sublinear_tf=True,
+            use_idf=True,
+            norm="l2",
+        )),
+        ("clf", SGDClassifier(
+            loss="log_loss",
+            penalty="elasticnet",
+            alpha=alpha,
+            l1_ratio=0.25,
+            class_weight="balanced",
+            max_iter=30,
+            random_state=42,
+            n_jobs=-1,
+        )),
+    ])
+
+
+def build_specialist_models(X, y):
+    specialist_models = {}
+    for cluster_name, actions in SPECIALIST_ACTION_CLUSTERS.items():
+        indexes = [i for i, label in enumerate(y) if label in actions]
+        cluster_y = [y[i] for i in indexes]
+        if len(set(cluster_y)) < 2:
+            continue
+        cluster_X = [X[i] for i in indexes]
+        model = build_specialist_model()
+        model.fit(cluster_X, cluster_y)
+        specialist_models[cluster_name] = model
+    return specialist_models
+
+
 def build_hierarchical_model(X, y):
     groups = [ACTION_TO_GROUP[label] for label in y]
     group_model = build_model(alpha=1e-6)
@@ -165,6 +213,7 @@ def build_hierarchical_model(X, y):
         "model_type": "sgd",
         "group_model": group_model,
         "action_models": action_models,
+        "specialist_models": build_specialist_models(X, y),
         "action_to_group": ACTION_TO_GROUP,
         "group_to_actions": group_to_actions,
     }
@@ -215,6 +264,7 @@ def predict_with_model(model, X):
                 best_action = None
                 best_score = -1.0
                 candidate_actions = candidate_actions_from_text(text)
+                action_scores = []
                 for group, group_prob in top_groups:
                     action_model = model["action_models"].get(str(group))
                     if action_model is None or not hasattr(action_model, "predict_proba"):
@@ -225,9 +275,18 @@ def predict_with_model(model, X):
                         score = float(group_prob) * float(action_prob)
                         if candidate_actions is not None and action not in candidate_actions:
                             score *= 0.9
+                        action_scores.append((action, score))
                         if score > best_score:
                             best_score = score
                             best_action = action
+                action_scores.sort(key=lambda item: item[1], reverse=True)
+                if len(action_scores) >= 2:
+                    best_action = apply_specialist_correction(
+                        model,
+                        text,
+                        action_scores,
+                        best_action,
+                    )
                 if best_action is None:
                     best_action = model["action_models"][str(top_groups[0][0])].predict([text])[0]
                 predictions.append(best_action)
@@ -242,6 +301,36 @@ def predict_with_model(model, X):
             predictions.append(action_model.predict([text])[0])
         return predictions
     return model.predict(X)
+
+
+def apply_specialist_correction(model, text, action_scores, best_action):
+    specialist_models = model.get("specialist_models", {})
+    if not specialist_models:
+        return best_action
+
+    top_action, top_score = action_scores[0]
+    second_action, second_score = action_scores[1]
+    if top_action != best_action:
+        return best_action
+    if top_score - second_score > SPECIALIST_MARGIN_THRESHOLD:
+        return best_action
+
+    for cluster_name, actions in SPECIALIST_ACTION_CLUSTERS.items():
+        if top_action not in actions or second_action not in actions:
+            continue
+        specialist_model = specialist_models.get(cluster_name)
+        if specialist_model is None or not hasattr(specialist_model, "predict_proba"):
+            return best_action
+        classes = list(specialist_model.named_steps["clf"].classes_)
+        probabilities = specialist_model.predict_proba([text])[0]
+        best_index = int(probabilities.argmax())
+        specialist_action = classes[best_index]
+        specialist_confidence = float(probabilities[best_index])
+        if specialist_action != top_action and specialist_confidence >= SPECIALIST_CONFIDENCE_THRESHOLD:
+            return specialist_action
+        return best_action
+
+    return best_action
 
 
 def score_candidate(name, model, X_valid, y_valid):

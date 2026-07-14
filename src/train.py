@@ -56,7 +56,7 @@ SPECIALIST_CONFIDENCE_THRESHOLD = 0.6
 SPECIALIST_MARGIN_THRESHOLD = 0.05
 SPECIALIST_CLUSTER_THRESHOLDS = {
     "search": (0.4, 0.02),
-    "execute": (0.45, 0.08),
+    "execute": (0.45, 0.15),
 }
 SPECIALIST_MODEL_ALPHA = {
     "execute": 5e-5,

@@ -13,22 +13,6 @@ import pandas as pd
 from src.preprocess import make_input_text
 
 
-ACTION_TO_GROUP = {
-    "list_directory": "search_read",
-    "glob_pattern": "search_read",
-    "grep_search": "search_read",
-    "read_file": "search_read",
-    "edit_file": "write_edit",
-    "write_file": "write_edit",
-    "apply_patch": "write_edit",
-    "run_bash": "execute_check",
-    "run_tests": "execute_check",
-    "lint_or_typecheck": "execute_check",
-    "respond_only": "dialog_plan",
-    "ask_user": "dialog_plan",
-    "plan_task": "dialog_plan",
-    "web_search": "dialog_plan",
-}
 SPECIALIST_ACTION_CLUSTERS = {
     "search": {"read_file", "list_directory", "grep_search", "glob_pattern"},
     "write": {"edit_file", "apply_patch"},
@@ -42,7 +26,6 @@ SPECIALIST_CLUSTER_THRESHOLDS = {
     "write": (0.6, 0.15),
     "execute": (0.45, 0.15),
 }
-STACK_TOKEN_MODE = "action_group"
 
 
 def load_jsonl(path: str):
@@ -84,26 +67,7 @@ def candidate_actions_from_text(text: str):
     return actions
 
 
-def stack_token_for_prediction(action: str) -> str:
-    group = ACTION_TO_GROUP.get(action, "unknown")
-    if STACK_TOKEN_MODE == "action_group":
-        return f"STACK_PRED_ACTION_{action} STACK_PRED_GROUP_{group}"
-    return f"STACK_PRED_ACTION_{action}"
-
-
-def append_stack_tokens(X, predicted_actions):
-    return [
-        f"{text}\n\n{stack_token_for_prediction(action)}"
-        for text, action in zip(X, predicted_actions)
-    ]
-
-
 def predict_with_model(model, X):
-    if isinstance(model, dict) and model.get("kind") == "stacked_hierarchical":
-        base_predictions = predict_with_model(model["base_model"], X)
-        stacked_X = append_stack_tokens(X, base_predictions)
-        return predict_with_model(model["stack_model"], stacked_X)
-
     if isinstance(model, dict) and model.get("kind") == "hierarchical":
         group_model = model["group_model"]
         if hasattr(group_model, "predict_proba"):
